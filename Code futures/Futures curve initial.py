@@ -29,19 +29,24 @@ def futures_trades_pull(date,futures_df, futures_month_df):
     date_first = date - pd.DateOffset(months = 9)
     date_range = pd.DataFrame(futures_month_df.loc[date_first:date].index)
     date_value_range = pd.DataFrame({'Dates': date_range['Dates'],
-                                     'price': np.float64(0)}).set_index(date_range['Dates']).drop(columns = 'Dates')
+                                     'price': np.float64(0),
+                                     'time delta': 0,
+                                     'diff real' : float(0)}).set_index(date_range['Dates']).drop(columns = 'Dates')
+    month_mean = float(day_ahead_df_monthly.loc[date + pd.offsets.MonthEnd(0)].iloc[0])
     for i in date_range['Dates']:
         col = (futures_month_df.loc[i] == date_ID).idxmax()
         date_value_range.loc[i, 'price'] = float(futures_df.loc[i].loc[col])
+        date_value_range.loc[i, 'diff real'] = float(futures_df.loc[i].loc[col]) - month_mean
+        date_value_range.loc[i, 'time delta'] = int((i - date).days)
 
     return date_value_range
 
-date = pd.to_datetime('2021-09-01')
+date = pd.to_datetime('2023-10-01')
 date_last_period = date + pd.offsets.MonthEnd(0)
 
 plt.figure()
 plt.plot(futures_trades_pull(date, futures_df, futures_month_df), label='Daily MOC pricing for forward contract')
-plt.plot(day_ahead_df.loc[date_last_period - pd.DateOffset(months =9): date_last_period], color='green', label=f'Day ahead prices for {date.strftime('%B')} {date.year}')
+plt.plot(day_ahead_df.loc[date_last_period - pd.DateOffset(months =10): date_last_period], color='green', label=f'Day ahead prices for {date.strftime('%B')} {date.year}')
 plt.axhline(y = float(day_ahead_df_monthly.loc[date_last_period].iloc[0]), color = 'red', linestyle = '--', label=f'Avg. realized day ahead price for {date.strftime('%B')} {date.year}')
 plt.title(f"Forward price for {date.strftime('%B')} {date.year}")
 plt.legend()
