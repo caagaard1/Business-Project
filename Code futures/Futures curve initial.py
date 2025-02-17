@@ -8,9 +8,10 @@ from scipy import stats
 from sklearn.metrics import r2_score
 from statsmodels.tsa.stattools import adfuller
 from scipy.optimize import minimize
+from dateutil.relativedelta import relativedelta
 
-day_ahead_df = pd.read_csv(r'C:\Users\chrsr\PycharmProjects\Business_Project\Data\Day ahead\20250121 - Electricity day ahead prices, avg.csv')
-futures_df = pd.read_csv(r'C:\Users\chrsr\PycharmProjects\Business_Project\Data\Futures\20250122 - Futures curve.csv')
+day_ahead_df = pd.read_csv(r'C:\Users\chrsr\Business_Project_GitHub\Data\Day ahead\20250121 - Electricity day ahead prices, avg.csv')
+futures_df = pd.read_csv(r'C:\Users\chrsr\Business_Project_GitHub\Data\Futures\20250122 - Futures curve.csv')
 
 day_ahead_df = day_ahead_df.set_index(pd.to_datetime(day_ahead_df['Date delivery'], format = '%d/%m/%Y') ).drop(columns = {'Date delivery'})
 futures_df = futures_df.set_index(pd.to_datetime(futures_df['Dates'], format = '%d/%m/%Y')).drop(columns = {'Dates'}).dropna()
@@ -40,6 +41,42 @@ def futures_trades_pull(date,futures_df, futures_month_df):
         date_value_range.loc[i, 'time delta'] = int((i - date).days)
 
     return date_value_range
+
+def premium_calculation():
+    date_pull_min = max(min(futures_df.index) + pd.DateOffset(months = 9), min(day_ahead_df_monthly.index)) + pd.offsets.MonthEnd(0)
+    date_pull_max = min(max(futures_df.index), max(day_ahead_df_monthly.index)) - pd.DateOffset(months = 1) + pd.offsets.MonthEnd(0)
+    date_pull_min = date_pull_min.date()
+    date_pull_max = date_pull_max.date()
+    months_num = relativedelta(date_pull_max, date_pull_min).months + relativedelta(date_pull_max, date_pull_min).years * 12
+    premium_output_df = pd.DataFrame({'temp': [0]*276}, index=range(-276, 1))
+    for i in range(months_num): #months_num
+        date = date_pull_min + pd.DateOffset(months = i)
+        temp_df = futures_trades_pull(date, futures_df, futures_month_df)
+        temp_df = temp_df.fillna(method='ffill')
+        
+        premium_output_df[date.strftime('%Y-%m-%d')] = premium_output_df.index.to_series().map(temp_df.set_index('time delta')['diff real'])
+
+    return(premium_output_df)
+
+premium_output_df = premium_calculation()
+
+plt.figure(figsize=(10, 6))
+
+# Plot each column in premium_output_df with transparency
+for column in premium_output_df.columns:
+    plt.plot(premium_output_df.index, premium_output_df[column], color='gray', alpha=0.2)
+
+# Plot the average line in solid color
+average_premium = premium_output_df.mean(axis=1)
+plt.plot(premium_output_df.index, average_premium, color='red', label='Average Premium')
+
+plt.title('Premium Output Over Time')
+plt.xlabel('Time Delta')
+plt.ylabel('Premium')
+plt.legend()
+plt.tight_layout()
+plt.show()
+
 
 date = pd.to_datetime('2023-10-01')
 date_last_period = date + pd.offsets.MonthEnd(0)
