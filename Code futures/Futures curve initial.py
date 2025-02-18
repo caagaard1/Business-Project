@@ -48,14 +48,17 @@ def premium_calculation():
     date_pull_min = date_pull_min.date()
     date_pull_max = date_pull_max.date()
     months_num = relativedelta(date_pull_max, date_pull_min).months + relativedelta(date_pull_max, date_pull_min).years * 12
-    premium_output_df = pd.DataFrame({'temp': [0]*276}, index=range(-276, 1))
-    for i in range(months_num): #months_num
+    date_range_index = pd.date_range(start=date_pull_min - pd.DateOffset(months=9), end=date_pull_max, freq='D')
+    premium_output_df = pd.DataFrame({'temp': [0]*len(date_range_index)}, index=date_range_index)
+    for i in range(months_num): 
         date = date_pull_min + pd.DateOffset(months = i)
         temp_df = futures_trades_pull(date, futures_df, futures_month_df)
-        temp_df = temp_df.fillna(method='ffill')
+        temp_df = temp_df.ffill()
         
-        premium_output_df[date.strftime('%Y-%m-%d')] = premium_output_df.index.to_series().map(temp_df.set_index('time delta')['diff real'])
-
+        merged_df = pd.concat([premium_output_df, temp_df['diff real']], axis=1, join='outer')
+        premium_output_df[date.strftime('%Y-%m-%d')] = merged_df['diff real']
+    
+    premium_output_df = premium_output_df.drop(columns=['temp'])
     return(premium_output_df)
 
 premium_output_df = premium_calculation()
@@ -66,14 +69,9 @@ plt.figure(figsize=(10, 6))
 for column in premium_output_df.columns:
     plt.plot(premium_output_df.index, premium_output_df[column], color='gray', alpha=0.2)
 
-# Plot the average line in solid color
-average_premium = premium_output_df.mean(axis=1)
-plt.plot(premium_output_df.index, average_premium, color='red', label='Average Premium')
-
 plt.title('Premium Output Over Time')
 plt.xlabel('Time Delta')
 plt.ylabel('Premium')
-plt.legend()
 plt.tight_layout()
 plt.show()
 
