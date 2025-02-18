@@ -33,11 +33,13 @@ def futures_trades_pull(date,futures_df, futures_month_df):
                                      'price': np.float64(0),
                                      'time delta': 0,
                                      'diff real' : float(0)}).set_index(date_range['Dates']).drop(columns = 'Dates')
-    month_mean = float(day_ahead_df_monthly.loc[date + pd.offsets.MonthEnd(0)].iloc[0])
+    #month_mean = float(day_ahead_df_monthly.loc[date + pd.offsets.MonthEnd(0)].iloc[0])
+
     for i in date_range['Dates']:
+        day_ahead_price = day_ahead_df.loc[i].iloc[0]
         col = (futures_month_df.loc[i] == date_ID).idxmax()
         date_value_range.loc[i, 'price'] = float(futures_df.loc[i].loc[col])
-        date_value_range.loc[i, 'diff real'] = float(futures_df.loc[i].loc[col]) - month_mean
+        date_value_range.loc[i, 'diff real'] = float(futures_df.loc[i].loc[col]) - day_ahead_price
         date_value_range.loc[i, 'time delta'] = int((i - date).days)
 
     return date_value_range
