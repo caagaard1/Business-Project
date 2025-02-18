@@ -67,7 +67,7 @@ plt.figure(figsize=(10, 6))
 
 # Plot each column in premium_output_df with transparency
 for column in premium_output_df.columns:
-    plt.plot(premium_output_df.index, premium_output_df[column], color='gray', alpha=0.2)
+    plt.plot(premium_output_df.index, premium_output_df[column])
 
 plt.title('Premium Output Over Time')
 plt.xlabel('Time Delta')
@@ -80,7 +80,7 @@ date = pd.to_datetime('2023-10-01')
 date_last_period = date + pd.offsets.MonthEnd(0)
 
 plt.figure()
-plt.plot(futures_trades_pull(date, futures_df, futures_month_df), label='Daily MOC pricing for forward contract')
+plt.plot(futures_trades_pull(date, futures_df, futures_month_df)['price'], label='Daily MOC pricing for forward contract')
 plt.plot(day_ahead_df.loc[date_last_period - pd.DateOffset(months =10): date_last_period], color='green', label=f'Day ahead prices for {date.strftime('%B')} {date.year}')
 plt.axhline(y = float(day_ahead_df_monthly.loc[date_last_period].iloc[0]), color = 'red', linestyle = '--', label=f'Avg. realized day ahead price for {date.strftime('%B')} {date.year}')
 plt.title(f"Forward price for {date.strftime('%B')} {date.year}")
