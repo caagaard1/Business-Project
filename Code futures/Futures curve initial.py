@@ -12,10 +12,14 @@ from dateutil.relativedelta import relativedelta
 
 day_ahead_df = pd.read_csv(r'C:\Users\chrsr\Business_Project_GitHub\Data\Day ahead\20250121 - Electricity day ahead prices, avg.csv')
 futures_df = pd.read_csv(r'C:\Users\chrsr\Business_Project_GitHub\Data\Futures\20250122 - Futures curve.csv')
+futures_adj_df = pd.read_excel(r'C:\Users\chrsr\Business_Project_GitHub\Data\futures vs. dayahaead correlation.xlsx', sheet_name=0)
 
 day_ahead_df = day_ahead_df.set_index(pd.to_datetime(day_ahead_df['Date delivery'], format = '%d/%m/%Y') ).drop(columns = {'Date delivery'})
 futures_df = futures_df.set_index(pd.to_datetime(futures_df['Dates'], format = '%d/%m/%Y')).drop(columns = {'Dates'}).dropna()
 futures_df = futures_df.apply(pd.to_numeric, errors = 'coerce')
+
+futures_adj_df = futures_adj_df.set_index(pd.to_datetime(futures_adj_df['Dates'], format = '%d/%m/%Y')).drop(columns = {'Dates'}).dropna()
+futures_adj_df = futures_adj_df.apply(pd.to_numeric, errors = 'coerce')
 
 day_ahead_df_monthly = day_ahead_df.resample('ME').mean()
 
@@ -32,14 +36,16 @@ def futures_trades_pull(date,futures_df, futures_month_df):
     date_value_range = pd.DataFrame({'Dates': date_range['Dates'],
                                      'price': np.float64(0),
                                      'time delta': 0,
+                                     'day-ahead': float(0),
                                      'diff real' : float(0)}).set_index(date_range['Dates']).drop(columns = 'Dates')
-    #month_mean = float(day_ahead_df_monthly.loc[date + pd.offsets.MonthEnd(0)].iloc[0])
+    month_mean = float(day_ahead_df_monthly.loc[date + pd.offsets.MonthEnd(0)].iloc[0])
 
     for i in date_range['Dates']:
-        day_ahead_price = day_ahead_df.loc[i].iloc[0]
+
         col = (futures_month_df.loc[i] == date_ID).idxmax()
         date_value_range.loc[i, 'price'] = float(futures_df.loc[i].loc[col])
-        date_value_range.loc[i, 'diff real'] = float(futures_df.loc[i].loc[col]) - day_ahead_price
+        date_value_range.loc[i, 'diff real'] = float(futures_df.loc[i].loc[col]) - month_mean
+        date_value_range.loc[i, 'day-ahead'] = day_ahead_df.loc[i].iloc[0]
         date_value_range.loc[i, 'time delta'] = int((i - date).days)
 
     return date_value_range

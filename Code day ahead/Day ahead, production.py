@@ -160,7 +160,7 @@ def initialize_multistep(target_date, x = None):
         np.random.seed(x)
     LT_vol = price_dataframe['rolling volatility LT'].iloc[-1]
 
-    for i in range(30):
+    for i in range(270):
         ARIMA_value =  ARIMA_step(price_dataframe, ar_params, ma_params, d)
         #ARIMA_value =  float(price_dataframe['price'].iloc[-1])
         jump_adj_price, jump_size, sim_variance = jump_step(ARIMA_value, price_dataframe, calibrated_params, sim_variance, LT_vol , seed = x)
@@ -181,7 +181,7 @@ def one_period_simulator(target_date):
 
     return (one_period_simulation, one_period_simulation_vol)
 
-target_date = '2023-09-01'
+target_date = '2023-02-01'
 
 one_period_simulation, one_period_simulation_vol = one_period_simulator(target_date)
 plt.figure(figsize=(12,8))
