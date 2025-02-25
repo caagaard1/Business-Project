@@ -17,14 +17,12 @@ and as such we will focus our analysis on M+1, i.e., the front-month futures pri
 and the most correlated with the day-ahead prices, making it suitable for our continued analysis. 
 """
 
-#%% section 1
 futures_df_full = pd.read_excel(r'C:\Users\chrsr\Business_Project_GitHub\Data\futures vs. dayahaead correlation.xlsx', sheet_name=1)
 futures_df_full = futures_df_full.set_index(pd.to_datetime(futures_df_full['Dates'], format = '%d/%m/%Y')).drop(columns = {'Dates'}).dropna()
 futures_df_full = futures_df_full.apply(pd.to_numeric, errors = 'coerce')
 futures_df = futures_df_full['M+1'].copy()
 
 plot_year = 2024
-
 
 plt.figure(figsize=(10, 6))
 plt.plot(futures_df.loc[futures_df.index.year == plot_year], label = 'M+1')
@@ -45,7 +43,7 @@ continuous function, allowing us to more robustly determine statistical properti
 such as interest rates, stock market indices, etc. 
 
 """
-#%% section 2
+
 futures_adj_df = pd.read_excel(r'C:\Users\chrsr\Business_Project_GitHub\Data\futures vs. dayahaead correlation.xlsx', sheet_name=0)
 futures_adj_df = futures_adj_df.set_index(pd.to_datetime(futures_adj_df['Dates'], format = '%d/%m/%Y')).drop(columns = {'Dates'}).dropna()
 futures_adj_df = futures_adj_df.apply(pd.to_numeric, errors = 'coerce')
@@ -87,5 +85,5 @@ plt.show()
 """Plotting the premium paid over the day-ahead price and the 30-day moving average we observe that the premium is generally positive as well
 having no obvious patterns except for it being very high during the period of 2022 where day-ahead prices skyrocketed. We will now attempt to
 understand the premium paid in the context of other macroeconomic factors such as interest rates (should dictate the carry in the futures
-contract), stock market returns, gas prices, gas storage levels, and economic sentiment (through producer price index)."""
+contract), stock market returns, gas prices, gas storage levels, and economic sentiment (through producer price index or similar)."""
 
