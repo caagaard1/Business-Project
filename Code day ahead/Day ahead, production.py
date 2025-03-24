@@ -160,9 +160,9 @@ def initialize_multistep(target_date, x = None):
         np.random.seed(x)
     LT_vol = price_dataframe['rolling volatility LT'].iloc[-1]
 
-    for i in range(270):
-        ARIMA_value =  ARIMA_step(price_dataframe, ar_params, ma_params, d)
-        #ARIMA_value =  float(price_dataframe['price'].iloc[-1])
+    for i in range(60):
+        #ARIMA_value =  ARIMA_step(price_dataframe, ar_params, ma_params, d)
+        ARIMA_value =  float(price_dataframe['price'].iloc[-1])
         jump_adj_price, jump_size, sim_variance = jump_step(ARIMA_value, price_dataframe, calibrated_params, sim_variance, LT_vol , seed = x)
         temp_row  = pd.DataFrame(
             {price_dataframe.columns[0] : [jump_adj_price],
@@ -180,6 +180,32 @@ def one_period_simulator(target_date):
         one_period_simulation_vol[f'sim {x}'] = initialize_multistep(target_date)['rolling volatility']
 
     return (one_period_simulation, one_period_simulation_vol)
+
+
+def historical_futures_pdf():
+    start_date = '2017-12-19'
+    end_date = '2024-12-31' #'2024-12-31'
+    historical_futures_pdf_data = pd.DataFrame()
+    historical_DA_est_vol = pd.DataFrame()
+    simulation_days = pd.date_range(start = pd.to_datetime(start_date), end = pd.to_datetime(end_date))
+    simulation_days = [d.strftime('%Y-%m-%d') for d in simulation_days]
+    for i in simulation_days:
+        print(i)
+        one_period_simulation, one_period_simulation_vol = one_period_simulator(i)
+        avg_date_start = pd.to_datetime(i) + pd.offsets.MonthEnd(0) + pd.Timedelta(days = 1)
+        avg_date_end = pd.to_datetime(i) + pd.offsets.MonthEnd(2) + pd.Timedelta(days=1)
+        futures_price_ref = one_period_simulation.loc[(one_period_simulation.index >= avg_date_start) & (one_period_simulation.index < avg_date_end)].mean().to_frame().T
+        day_ahead_vol = one_period_simulation_vol.loc[(one_period_simulation_vol.index >= avg_date_start) & (one_period_simulation_vol.index < avg_date_end)].mean().to_frame().T
+
+        futures_price_ref.index = [i]
+        day_ahead_vol.index = [i]
+
+        historical_futures_pdf_data = pd.concat([historical_futures_pdf_data, futures_price_ref])
+        historical_DA_est_vol = pd.concat([historical_DA_est_vol, day_ahead_vol])
+
+        historical_futures_pdf_data.to_csv(f'historical_futures_pdf_data_{start_date}.csv', index=True)
+        historical_DA_est_vol.to_csv(f'historical_DA_est_vol.csv{start_date}', index=True)
+
 
 target_date = '2023-02-01'
 
