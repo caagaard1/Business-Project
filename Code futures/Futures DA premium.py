@@ -12,10 +12,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.optimize import minimize
 from dateutil.relativedelta import relativedelta
 import matplotlib
-from Functions_stat import test_linear_regression_assumptions
-from Functions_stat import run_xgboost_regression
-from Functions_stat import run_lasso_regression
-from Functions_stat import run_pca
+
 
 matplotlib.use("TkAgg")
 
@@ -47,76 +44,17 @@ futures_df_full = futures_df_full.set_index(pd.to_datetime(futures_df_full['Date
 futures_df_full = futures_df_full.apply(pd.to_numeric, errors = 'coerce')
 futures_df = futures_df_full['M+1'].copy()
 
-plot_year = 2024
+futures_DA_df = pd.DataFrame(futures_df) #WE NO LONGER ADJUST AS IT DOENS'T MAKE SENSE FOR FURTHER ANALYSIS
+futures_DA_df = pd.merge(futures_DA_df, day_ahead_prices, left_index = True, right_index = True, how = 'left')
 
-plt.figure(figsize=(10, 6))
-plt.plot(futures_df.loc[futures_df.index.year == plot_year], label = 'M+1')
-plt.title('Front-month futures curve')
-plt.xlabel('Dates')
-plt.ylabel('€ / MWh')
-
-
-"""We witness large discontinuous changes in the front-month price at the end of each month, this is due to the rollover effect where in the
-front-month contract changes to the new month which has been separately traded. In an attempt to combat this, giving us a smoother futures
-curve, we will apply a in month weighting of the two futures contracts, the adjusted futures contract price will be found as:
-
-M+1, adj = M+1 * (D_1 / M_0) + M+2 * (M_0 - D_1) / M_0
-Where: D_1 is the days in the month until next month, M_0 is the total number of days in the month, M+2 is the month after the front-months futures contract
-
-While this creates an artificial futures contract price that is not traded in real life, it will provide us with a much more smooth and
-continuous function, allowing us to more robustly determine statistical properties and compare it with other continuous forms of information
-such as interest rates, stock market indices, etc. 
-
-"""
-
-futures_adj_df = pd.read_excel(r'C:\Users\chrsr\Business_Project_GitHub\Data\futures vs. dayahaead correlation.xlsx', sheet_name=0)
-futures_adj_df = futures_adj_df.set_index(pd.to_datetime(futures_adj_df['Dates'], format = '%d/%m/%Y')).drop(columns = {'Dates'}).dropna()
-futures_adj_df = futures_adj_df.apply(pd.to_numeric, errors = 'coerce')
-futures_adj_df = futures_adj_df['M+1, adj.'].copy()
-futures_adj_df = pd.DataFrame(futures_adj_df)
-
-plt.plot(futures_adj_df.loc[futures_adj_df.index.year == plot_year], label = 'M+1, adj.')
-
-
-months_ends_temp = futures_adj_df.loc[futures_adj_df.index.year == plot_year].resample('ME').last().index
-for date in months_ends_temp:
-    plt.axvline(date, color = 'red', linestyle = '--', alpha = 0.5)
-
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-"""By our adjustment we reduce the large up and down jumps witnessed at the end of each month. We will now begin by looking at the premium paid
-on the futures contract over the day ahead price for the day, which would imply the additional (or less) price an investor is willing to 
-pay to hedge their risk on future day-ahead prices
-"""
-
-futures_adj_DA_df = pd.DataFrame(futures_adj_df)
-futures_adj_DA_df = pd.merge(futures_adj_DA_df, day_ahead_prices, left_index = True, right_index = True, how = 'left')
-
-
-
-futures_adj_DApremium = pd.DataFrame(futures_adj_df)
-futures_adj_DApremium['M+1, adj, premium'] = futures_adj_DA_df['M+1, adj.'] - futures_adj_DA_df['Day ahead price']
+futures_DApremium = pd.DataFrame(futures_df)
+futures_DApremium['M+1, premium'] = futures_DA_df['M+1'] - futures_DA_df['Day ahead price']
 
 intervals = sorted(list({7, 30, 60}))
 
 #Set up of Premiums on MVA of day ahead prices
 for i in intervals:
-    futures_adj_DApremium[f'Premium on MVA {i}'] = futures_adj_DA_df['M+1, adj.'] - futures_adj_DA_df[f'DA MVA {i}']
-
-
-plt.figure(figsize=(10, 6))
-
-plt.plot(futures_adj_DApremium, label = futures_adj_DApremium.columns)
-
-plt.title('Premium Output Over Time')
-plt.xlabel('Time Delta')
-plt.ylabel('Premium')
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+    futures_DApremium[f'Premium on MVA {i}'] = futures_DA_df['M+1'] - futures_DA_df[f'DA MVA {i}']
 
 """Plotting the premium paid over the day-ahead price and the 30-day moving average we observe that the premium is generally positive as well
 having no obvious patterns except for it being very high during the period of 2022 where day-ahead prices skyrocketed. We will now attempt to
@@ -127,33 +65,15 @@ eco_correl_df = pd.read_excel(r'C:\Users\chrsr\Business_Project_GitHub\Data\2025
 eco_correl_df = eco_correl_df.set_index(pd.to_datetime(eco_correl_df['Dates'], format = '%d/%m/%Y')).drop(columns = {'Dates'})
 
 
-futures_premium_eco_df = pd.merge(futures_adj_DApremium, eco_correl_df, left_index = True, right_index = True, how = 'left').dropna()
+futures_premium_eco_df = pd.merge(futures_DApremium, eco_correl_df, left_index = True, right_index = True, how = 'left').dropna()
 futures_premium_eco_df['Gas Storage (TWh), deseason'] =futures_premium_eco_df['Gas Storage (TWh)'] - seasonal_decompose(futures_premium_eco_df['Gas Storage (TWh)'], model='additive', period = 365).seasonal
 
 
 correl_matrix_1 = futures_premium_eco_df.corr()
 
-
-"""Technically to be done later, but: Looking at day-ahead volatility"""
-
-
-#Day ahead plot showing MVA and rolling Vol
-plt.figure(figsize=(10,6))
-plt.subplot(2,1,1)
-plt.plot(day_ahead_prices.iloc[:, 0:4], label = day_ahead_prices.iloc[:, 0:4].columns)
-plt.title('Day ahead prices')
-plt.legend()
-
-plt.subplot(2,1,2)
-plt.plot(day_ahead_prices.iloc[:, 4:7], label = day_ahead_prices.iloc[:, 4:7].columns)
-plt.legend()
-plt.title('Day ahead volatility')
-plt.tight_layout()
-plt.show()
-
 #Merging into a new dataframe
 
-futures_premium_reg_df = pd.merge(futures_adj_DApremium, day_ahead_prices, left_index = True, right_index = True, how ='left').dropna()
+futures_premium_reg_df = pd.merge(futures_DApremium, day_ahead_prices, left_index = True, right_index = True, how ='left').dropna()
 
 correl_matrix_2 = futures_premium_reg_df.corr()
 
@@ -170,124 +90,114 @@ However, we should also be cautious in interpreting the results directly, as the
 is also somewhat mechanical, as the day ahead prices have been used in the calculation of the premium!!  
 """
 
-#Create a regression model on %change adj premium and %change DA rolling vol
+#Calculate the estimated futures prices based on the model, turn them into a PDF, and compare with current price
 
-#Percentage change
-target_df = pd.DataFrame({'target': futures_premium_reg_df['M+1, adj.'].rolling(window = 7).mean().dropna().pct_change()})
-
-feature_df = pd.DataFrame({
-    'f1_DA_7MVA' : futures_premium_reg_df['DA MVA 7'].pct_change(),
-    'f2_DA_30MVA' : futures_premium_reg_df['DA MVA 30'].pct_change(),
-    'f3_DA_60MVA' : futures_premium_reg_df['DA MVA 60'].pct_change(),
-    'f4_DAVol_7MVA' : futures_premium_reg_df['DA rolling vol 7'].pct_change(),
-    'f5_DAVol_30MVA' : futures_premium_reg_df['DA rolling vol 30'].pct_change(),
-    'f6_DAVol_60MVA' : futures_premium_reg_df['DA rolling vol 60'].pct_change(),
-    'f7_FUVol_7MVA' : futures_premium_reg_df['M+1, adj.'].rolling(window=7).std().dropna().pct_change(),
-    'f8_FUVol_30MVA' : futures_premium_reg_df['M+1, adj.'].rolling(window=30).std().dropna().pct_change(),
-    'f9_FUVol_60MVA' : futures_premium_reg_df['M+1, adj.'].rolling(window=60).std().dropna().pct_change(),
-    'f10_FU_7MVA_VAL' : futures_premium_reg_df['M+1, adj.'].rolling(window = 7).mean().dropna(),
-    'f11_FU_30MVA_VAL' : futures_premium_reg_df['M+1, adj.'].rolling(window = 30).mean().dropna(),
-    'f12_FU_60MVA_VAL' : futures_premium_reg_df['M+1, adj.'].rolling(window = 60).mean().dropna(),
-    'f13_DA_7MVA_VAL' : futures_premium_reg_df['DA MVA 7'],
-    'f14_DA_30MVA_VAL' : futures_premium_reg_df['DA MVA 30'],
-    'f15_DA_60MVA_VAL' : futures_premium_reg_df['DA MVA 60'],
-}).shift(1).dropna()
-
-regression_df = target_df.join(feature_df, how = 'left').dropna()
-
-correl_matrix_3 = regression_df.corr()
-
-#Absolute relationship
-target_df = pd.DataFrame({'target': futures_premium_reg_df['M+1, adj, premium']})
-
-feature_df = pd.DataFrame({
-    'f1_DA_7MVA' : futures_premium_reg_df['DA MVA 7'],
-    'f2_DA_30MVA' : futures_premium_reg_df['DA MVA 30'],
-    'f3_DA_60MVA' : futures_premium_reg_df['DA MVA 60'],
-    'f4_DAVol_7MVA' : futures_premium_reg_df['DA rolling vol 7'],
-    'f5_DAVol_30MVA' : futures_premium_reg_df['DA rolling vol 30'],
-    'f6_DAVol_60MVA' : futures_premium_reg_df['DA rolling vol 60'],
-    'f7_FUVol_7MVA' : futures_premium_reg_df['M+1, adj.'].rolling(window=7).std().dropna(),
-    'f8_FUVol_30MVA' : futures_premium_reg_df['M+1, adj.'].rolling(window=30).std().dropna(),
-    'f9_FUVol_60MVA' : futures_premium_reg_df['M+1, adj.'].rolling(window=60).std().dropna(),
-    'f10_FU_7MVA_VAL' : futures_premium_reg_df['M+1, adj.'].rolling(window = 7).mean().dropna(),
-    'f11_FU_30MVA_VAL' : futures_premium_reg_df['M+1, adj.'].rolling(window = 30).mean().dropna(),
-    'f12_FU_60MVA_VAL' : futures_premium_reg_df['M+1, adj.'].rolling(window = 60).mean().dropna(),
-    'f13_DA_7MVA_VAL' : futures_premium_reg_df['DA MVA 7'],
-    'f14_DA_30MVA_VAL' : futures_premium_reg_df['DA MVA 30'],
-    'f15_DA_60MVA_VAL' : futures_premium_reg_df['DA MVA 60'],
-}).shift(1).dropna()
-
-regression_df = target_df.join(feature_df, how = 'left').dropna()
-
-correl_matrix_3 = regression_df.corr()
+from scipy.stats import gaussian_kde
+from scipy.interpolate import interp1d
 
 
+futures_sim_pdf_data = pd.read_csv(r'C:\Users\chrsr\Business_Project_GitHub\historical_futures_sim_data_2018-01-03 v5.csv')
+futures_sim_pdf_data.rename(columns = {futures_sim_pdf_data.columns[0] : 'Dates'}, inplace=True)
+futures_sim_pdf_data.set_index(pd.to_datetime(futures_sim_pdf_data.iloc[:,0]), inplace = True)
+futures_sim_pdf_data.drop(columns = {futures_sim_pdf_data.columns[0]}, inplace = True)
+futures_sim_pdf_data.dropna()
+futures_sim_pdf_data = futures_sim_pdf_data.clip(lower = -1000, upper =1000)
+
+kde_pdf_data = pd.DataFrame()
+linspace_data = pd.DataFrame()
+
+for i in futures_sim_pdf_data.index:
+    calc_data = np.array((futures_sim_pdf_data.iloc[futures_sim_pdf_data.index == i,:]).iloc[0,:])
+    kde_calc = gaussian_kde(calc_data)
+
+    x_calc = np.linspace(min(calc_data), max(calc_data), 1000)
+    new_row_linspace = pd.DataFrame([x_calc])
+    new_row_linspace.index = [pd.Timestamp(i)]
+
+    linspace_data = pd.concat([linspace_data, new_row_linspace])
+
+    pdf_calc = kde_calc(x_calc)
+    new_row_pdf = pd.DataFrame([pdf_calc])
+    new_row_pdf.index = [pd.Timestamp(i)]
+
+    kde_pdf_data = pd.concat([kde_pdf_data, new_row_pdf])
+
+    print(i)
+
+def get_mode_centered_interval(x, y, p=0.95):
+    dx = np.diff(x).mean()
+    # Normalize the PDF
+    y = y / (y.sum() * dx)
+    # Find index of the mode (highest point)
+    mode_idx = np.argmax(y)
+    # Sort indices by descending PDF (density)
+    sorted_indices = np.argsort(y)[::-1]
+    # Accumulate area until we reach the desired probability
+    area = 0.0
+    included_indices = []
+    for idx in sorted_indices:
+        area += y[idx] * dx
+        included_indices.append(idx)
+        if area >= p:
+            break
+    # Find bounds of the selected region
+    interval_x = x[sorted(included_indices)]
+    return interval_x[0], interval_x[-1]
 
 
+comparison_data = pd.DataFrame({'future current' : float(1), 'future sim': float(1), 'sim -5%': float(1), 'sim +5%': float(1)}, index = futures_sim_pdf_data.index)
 
+for i in futures_sim_pdf_data.index:
+    date = i.strftime('%Y-%m-%d')
+    x = linspace_data.loc[date].values.astype(float)
+    y = kde_pdf_data.loc[date].values.astype(float)
 
+    current = futures_DA_df.iloc[futures_DA_df.index == date,0].iloc[0]
+    max_like = x[np.argmax(y)]
+    a, b = get_mode_centered_interval(x, y, p=0.05)
 
+    comparison_data.loc[i,'future current'] = current
+    comparison_data.loc[i, 'future sim'] = max_like
+    comparison_data.loc[i, 'sim -5%'] = a
+    comparison_data.loc[i, 'sim +5%'] = b
 
+comparison_rolling = comparison_data.copy()
+comparison_rolling['future sim'] = comparison_rolling['future sim'].rolling(window = 7).mean()
+comparison_rolling['sim -5%'] = comparison_rolling['sim -5%'].rolling(window = 7).mean()
+comparison_rolling['sim +5%'] = comparison_rolling['sim +5%'].rolling(window = 7).mean()
+comparison_rolling = comparison_rolling.dropna()
 
-
-test_linear_regression_assumptions(regression_df, 'target', feature_cols=list(feature_df.columns), plot=False)
-temp, model = run_xgboost_regression(regression_df['target'], regression_df[feature_df.columns], max_depth=6, learning_rate=0.1)
-
-
-pca_df, explained_var, pca_model = run_pca(X=feature_df, n_components=6)
-regression_df_pca = target_df.join(pca_df, how = 'left').dropna()
-temp, model = run_xgboost_regression(regression_df_pca['target'], regression_df_pca[pca_df.columns], max_depth=6, learning_rate=0.1)
-
-
-
-
-pred_values = pd.DataFrame({'forecast' : model.predict(regression_df_pca[pca_df.columns])}, index=regression_df_pca.index)
-temp_df = pd.DataFrame(regression_df['target'])
-temp_df['forecast'] = pd.DataFrame(pred_values)
+r2_score(comparison_data['future current'], comparison_data['future sim'])
+r2_score(comparison_rolling['future current'], comparison_rolling['future sim'])
 
 plt.figure()
-plt.subplot(2,1,1)
-plt.plot(temp_df, label = temp_df.columns)
+plt.plot(comparison_rolling.iloc[:,0:2], label =comparison_rolling.columns[0:2] )
+plt.plot(comparison_rolling.iloc[:,2:4], label =comparison_rolling.columns[2:4], alpha = 0.2 )
 plt.legend()
-
-plt.subplot(2,1,2)
-plt.plot(temp_df['target'] - temp_df['forecast'], label='residuals')
 plt.show()
 
 
 
-pred_values = pd.DataFrame({'forecast' : model.predict(regression_df[feature_df.columns])}, index=regression_df.index)
-temp_df = pd.DataFrame(regression_df['target'])
-temp_df['forecast'] = pd.DataFrame(pred_values)
-
+date = '2022-02-05'
 plt.figure()
-plt.subplot(2,1,1)
-plt.plot(temp_df, label = temp_df.columns)
+x = linspace_data.iloc[linspace_data.index == date,:].iloc[0]
+y = kde_pdf_data.iloc[kde_pdf_data.index == date,:].iloc[0]
+target = futures_DA_df.iloc[futures_DA_df.index == date,0].iloc[0]
+
+interp_pdf = interp1d(x, y, kind='linear', fill_value="extrapolate")
+y_value = interp_pdf(target)
+
+plt.plot(x, y)
+plt.scatter(x.iloc[np.argmax(y)], max(y), color = 'red', label = 'MLV')
+plt.scatter(target, y_value, color = 'green', label ='Current price')
 plt.legend()
 
-plt.subplot(2,1,2)
-plt.plot(temp_df['target'] - temp_df['forecast'], label='residuals')
-plt.show()
+plt.axvline(comparison_data['sim -5%'][comparison_data.index == date].iloc[0] , color = 'orange', linestyle = '--', alpha = 0.3)
+plt.axvline(comparison_data['sim +5%'][comparison_data.index == date].iloc[0] , color = 'orange', linestyle = '--', alpha = 0.3)
 
 
-'--------------------------------'
 
 
-pred_values = pd.DataFrame({'forecast %': model.predict(regression_df[feature_df.columns])}, index=regression_df.index)
-pred_values += 1
-pred_values['t-1 value'] = pd.Series(futures_premium_reg_df['M+1, adj.'].shift(1)[futures_premium_reg_df.index >= min(regression_df.index)])
-pred_values['forecast'] = pred_values['forecast %'] * pred_values['t-1 value']
-
-observed = pd.Series(futures_premium_reg_df['M+1, adj.'][futures_premium_reg_df.index >= min(regression_df.index)])
-temp_df = pd.DataFrame({'target': observed})
-temp_df['forecast'] = pd.DataFrame(pred_values['forecast'])
-
-plt.figure()
-plt.subplot(2,1,1)
-plt.plot(temp_df, label = temp_df.columns)
-plt.legend()
-
-plt.subplot(2,1,2)
-plt.plot(temp_df['target'] - temp_df['forecast'], label='residuals')
-plt.show()
+plt.text(target + 2, y.median(), f'futures price: {target:.2f}')
+plt.text(x.iloc[np.argmax(y)], max(y), f'Max likelihood value: {x.iloc[np.argmax(y)]:.2f}')
+plt.axvline(target, color = 'red')

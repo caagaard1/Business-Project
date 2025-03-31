@@ -17,6 +17,32 @@ df = pd.read_csv(data_file)
 df['Date delivery'] = pd.to_datetime(df['Date delivery'], format= '%d/%m/%Y')
 df = df.rename(columns ={'Price': 'price'})
 df = df.set_index(df['Date delivery']).asfreq('D').dropna()
+df.drop(columns = {'Date delivery'}, inplace = True)
+
+df['month'] = df.index.month
+df['day'] = df.index.dayofweek
+
+df = df[df.index.year < 2021].dropna()
+
+M_season_dummies = pd.get_dummies(df["month"], prefix="month", drop_first=True)
+D_season_dummies = pd.get_dummies(df['day'], prefix = "day", drop_first = True)
+model_M = sm.OLS(df['price'], M_season_dummies).fit()
+model_M.summary()
+
+M_seasonal_fit = model_M.fittedvalues
+
+df['price m_adj'] = df['price'] - M_seasonal_fit
+
+model_D = sm.OLS(df['price m_adj'], D_season_dummies).fit()
+model_D.summary()
+
+D_seasonal_fit = model_D.fittedvalues
+
+df['price md_adj'] = df['price m_adj'] - D_seasonal_fit
+
+daily = df['price'].groupby(df['day']).mean()
+daily_df = pd.DataFrame({'Day': range(1,8), 'Avg. Price': daily})
+
 
 if input("Do you want to recalibrate ARIMA? (y/n): ").lower() == 'y':
     best_aic = float('inf')
